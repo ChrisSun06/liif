@@ -19,14 +19,18 @@ class LIIF(nn.Module):
 
         self.encoder = models.make(encoder_spec)
 
-        if imnet_spec is not None:
+        if imnet_spec is not None: # implicit mlp
             imnet_in_dim = self.encoder.out_dim
             if self.feat_unfold:
                 imnet_in_dim *= 9
+            split_list = [imnet_in_dim, 1, 1]
             imnet_in_dim += 2 # attach coord
             if self.cell_decode:
                 imnet_in_dim += 2
-            self.imnet = models.make(imnet_spec, args={'in_dim': imnet_in_dim})
+                split_list.append(2)
+            args_update = {'in_dim': imnet_in_dim}
+            if imnet_spec['name'] == 'split_mlp': args_update['split_list'] = split_list
+            self.imnet = models.make(imnet_spec, args=args_update)
         else:
             self.imnet = None
 
