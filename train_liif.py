@@ -34,6 +34,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 import datasets
 import models
 import utils
+from collections import OrderedDict
 from test import eval_psnr
 
 
@@ -74,6 +75,18 @@ def prepare_training():
             lr_scheduler.step()
     else:
         model = models.make(config['model']).cuda()
+
+        # TODO add fine-tune option
+        if config.get('split_finetune') is not None:   
+            sv_file = torch.load(config['split_finetune'])
+            encoder_sd = OrderedDict()     
+            for k,v in sv_file['model']['sd'].items(): 
+                if k.startswith('encoder'):
+                    encoder_sd[k[8:]] = v
+            model.encoder.load_state_dict(encoder_sd)
+            for param in model.encoder.parameters():
+                param.requires_grad = False
+
         optimizer = utils.make_optimizer(
             model.parameters(), config['optimizer'])
         epoch_start = 1
@@ -81,6 +94,8 @@ def prepare_training():
             lr_scheduler = None
         else:
             lr_scheduler = MultiStepLR(optimizer, **config['multi_step_lr'])
+    
+        
 
     log('model: #params={}'.format(utils.compute_num_params(model, text=True)))
     return model, optimizer, epoch_start, lr_scheduler

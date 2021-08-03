@@ -42,11 +42,13 @@ model:
       args:
         no_upsampling: true
     imnet_spec:
-      name: mlp
+      name: split_mlp
       args:
         out_dim: 3
         hidden_list: [256, 256, 256, 256]
+        fusion_layer: 2
 
+split_finetune: checkpoints/edsr-baseline-liif.pth
 optimizer:
   name: adam
   args:
