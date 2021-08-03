@@ -43,16 +43,17 @@ class LIIF(nn.Module):
                 .permute(0, 2, 1)
             return ret
 
-        if self.feat_unfold:
-            feat = F.unfold(feat, 3, padding=1).view(
-                feat.shape[0], feat.shape[1] * 9, feat.shape[2], feat.shape[3])
-
         if self.local_ensemble:
             vx_lst = [-1, 1]
             vy_lst = [-1, 1]
             eps_shift = 1e-6
         else:
             vx_lst, vy_lst, eps_shift = [0], [0], 0
+
+        # TODO redundant
+        if self.feat_unfold:
+            feat = F.unfold(feat, 3, padding=1).view(
+                feat.shape[0], feat.shape[1] * 9, feat.shape[2], feat.shape[3])
 
         # field radius (global: [-1, 1])
         rx = 2 / feat.shape[-2] / 2
@@ -66,9 +67,9 @@ class LIIF(nn.Module):
         areas = []
         for vx in vx_lst:
             for vy in vy_lst:
-                coord_ = coord.clone()
-                coord_[:, :, 0] += vx * rx + eps_shift
-                coord_[:, :, 1] += vy * ry + eps_shift
+                # coord_[:, :, 0] += vx * rx + eps_shift
+                # coord_[:, :, 1] += vy * ry + eps_shift
+                coord_ = coord + torch.tensor([vx * rx, vy * ry]).cuda() + eps_shift
                 coord_.clamp_(-1 + 1e-6, 1 - 1e-6)
                 q_feat = F.grid_sample(
                     feat, coord_.flip(-1).unsqueeze(1),

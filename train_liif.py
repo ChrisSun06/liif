@@ -91,6 +91,7 @@ def train(train_loader, model, optimizer):
     loss_fn = nn.L1Loss()
     train_loss = utils.Averager()
 
+    # TODO why not move this part outside of train function?
     data_norm = config['data_norm']
     t = data_norm['inp']
     inp_sub = torch.FloatTensor(t['sub']).view(1, -1, 1, 1).cuda()
@@ -98,7 +99,7 @@ def train(train_loader, model, optimizer):
     t = data_norm['gt']
     gt_sub = torch.FloatTensor(t['sub']).view(1, 1, -1).cuda()
     gt_div = torch.FloatTensor(t['div']).view(1, 1, -1).cuda()
-
+    ###
     for batch in tqdm(train_loader, leave=False, desc='train'):
         for k, v in batch.items():
             batch[k] = v.cuda()
