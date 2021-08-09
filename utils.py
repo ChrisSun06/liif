@@ -144,3 +144,13 @@ def calc_psnr(sr, hr, dataset=None, scale=1, rgb_range=1):
         valid = diff
     mse = valid.pow(2).mean()
     return -10 * torch.log10(mse)
+
+# Grid shape is [batch_size, features, points]
+# Inp shape is [batch_size, points]
+def one_d_sample(inp, grid):
+    grid_ = grid.swapaxes(1,2)
+    coord_nearest = torch.floor((inp * grid.shape[-1] + grid.shape[-1])/2).type(torch.LongTensor)
+    coord_nearest = torch.unsqueeze(coord_nearest, -1)
+    coord_nearest = coord_nearest.repeat(1, 1, grid_.shape[2])
+    ret_feat = torch.gather(grid_, 1, coord_nearest)
+    return ret_feat
