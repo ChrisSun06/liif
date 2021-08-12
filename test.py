@@ -13,18 +13,42 @@ import models
 import utils
 
 
-def batched_predict(model, inp, coord, cell, bsize):
-    with torch.no_grad():
-        model.gen_feat(inp)
-        n = coord.shape[1]
-        ql = 0
-        preds = []
-        while ql < n:
-            qr = min(ql + bsize, n)
-            pred = model.query_rgb(coord[:, ql: qr, :], cell[:, ql: qr, :])
-            preds.append(pred)
-            ql = qr
-        pred = torch.cat(preds, dim=1)
+def batched_predict(model, inp, coord, cell, bsize, coord_seqs=None): 
+    # coord_seqs to trigger split_accel
+    if coord_seqs is None:
+        with torch.no_grad():
+            model.gen_feat(inp)
+            n = coord.shape[1]
+            ql = 0
+            preds = []
+            while ql < n:
+                qr = min(ql + bsize, n)
+                pred = model.query_rgb(coord[:, ql: qr, :], cell[:, ql: qr, :])
+                preds.append(pred)
+                ql = qr
+            pred = torch.cat(preds, dim=1)
+    else:
+        with torch.no_grad():
+            model.gen_feat(inp, cell=cell, split_cache=True)
+            rel_coord_seqs, coord_feat_seqs, feat_id_seqs = model.prep_coords_split(coord_seqs)
+            
+            # TODO tile-wise batching, not flattening coord. The batch is based on #feat
+            try:
+                x_bsize, y_bsize = bsize # bsize should be a tuple or list
+            except:
+                x_bsize, y_bsize = bsize, bsize
+            x_len, y_len = coord.shape[1:3]
+            preds = []
+            for xi in range(0, x_len, x_bsize):
+                preds_row = []
+                for yi in range(0, y_len, y_bsize):
+                    rel_coord_seqs_ = (rel_coord_seqs[0][xi:xi+x_bsize], rel_coord_seqs[1][yi:yi+y_bsize])
+                    coord_feat_seqs_ = (coord_feat_seqs[0][xi:xi+x_bsize], coord_feat_seqs[1][yi:yi+y_bsize])
+                    feat_id_seqs_ = (feat_id_seqs[0][xi:xi+x_bsize], feat_id_seqs[1][yi:yi+y_bsize])
+                    pred = model.query_rgb_split(rel_coord_seqs_, coord_feat_seqs_, feat_id_seqs_)
+                    preds_row.append(pred)
+                preds.append(torch.cat(preds_row, 1)) #
+            pred = torch.cat(preds, 0)
     return pred
 
 

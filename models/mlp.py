@@ -54,9 +54,29 @@ class SplitMLP(nn.Module):
         for i in range(len(self.layers)-self.fusion_layer):
             xs = self.layers[i](xs)
         # fusion
-        x = xs.prod(-2)
-        for i in range(len(self.layers)-self.fusion_layer, len(self.layers)):
+        x = self.fusion_op(xs)
+        x = self.post_fusion(x)
+        return x
+    
+    def forward_channel(self, x, channel_id):
+        x = self.in_layer[channel_id](x)
+        for i in range(len(self.layers)-self.fusion_layer):
             x = self.layers[i](x)
+        return x
+
+    def fusion_op(self, xs):
+        if isinstance(xs, torch.Tensor):
+            x = xs.prod(-2)
+        else: # list
+            x = xs[0]
+            for xi in xs[1:]:
+                x = x * xi
+
         if self.fusion_layer == 0:
             x = x.reshape(*x.shape[:-1], self.out_dim, -1).sum(-1)
+        return x
+
+    def post_fusion(self, x):
+        for i in range(len(self.layers)-self.fusion_layer, len(self.layers)):
+            x = self.layers[i](x)
         return x

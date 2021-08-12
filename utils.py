@@ -7,7 +7,7 @@ import torch
 import numpy as np
 from torch.optim import SGD, Adam
 from tensorboardX import SummaryWriter
-
+import torch.nn.functional as F
 
 class Averager():
 
@@ -99,7 +99,8 @@ def make_optimizer(param_list, optimizer_spec, load_sd=False):
     return optimizer
 
 
-def make_coord(shape, ranges=None, flatten=True):
+def make_coord(shape, ranges=None, flatten=True, with_split=False, only_split=False, 
+               device=torch.device('cpu')):
     """ Make coordinates at grid centers.
     """
     coord_seqs = []
@@ -109,13 +110,39 @@ def make_coord(shape, ranges=None, flatten=True):
         else:
             v0, v1 = ranges[i]
         r = (v1 - v0) / (2 * n)
-        seq = v0 + r + (2 * r) * torch.arange(n).float()
+        seq = v0 + r + (2 * r) * torch.arange(n).float().to(device)
         coord_seqs.append(seq)
+    if only_split:
+        return coord_seqs
     ret = torch.stack(torch.meshgrid(*coord_seqs), dim=-1)
     if flatten:
         ret = ret.view(-1, ret.shape[-1])
-    return ret
+    if with_split:
+        return ret, coord_seqs
+    else:
+        return ret
 
+# Grid shape is [1, feature_coord]
+# Inp shape is [batch_size, coord]
+def one_d_sample_(inp, grid):
+    ret_feat = []
+    for i in range(2):
+        grid_ = grid[i].repeat(inp[i].shape[0], 1)
+        coord_nearest = torch.floor((inp[i] * grid[i].shape[-1] + grid[i].shape[-1])/2).type(torch.LongTensor)
+        feat = torch.gather(grid_, 1, coord_nearest)
+        ret_feat.append(feat)
+    return ret_feat
+
+# Grid shape is [1, feature_coord]
+# Inp shape is [batch_size, coord]
+def one_d_sample(inps, grids):
+    ret_feat = [
+        F.grid_sample(inp[None,None,None,:], 
+                torch.stack((grid, torch.zeros_like(grid)), -1)[None,None,:],
+                mode='nearest', align_corners=False).squeeze()
+            for inp, grid in zip(inps, grids)
+    ]
+    return ret_feat
 
 def to_pixel_samples(img):
     """ Convert the image to coord-RGB pairs.
