@@ -2,6 +2,7 @@ import argparse
 import os
 import math
 from functools import partial
+from typing import List
 
 import yaml
 import torch
@@ -84,21 +85,24 @@ def eval_psnr(loader, model, data_norm=None, eval_type=None, eval_bsize=None,
     pbar = tqdm(loader, leave=False, desc='val')
     for batch in pbar:
         for k, v in batch.items():
-            batch[k] = v.cuda()
-
+            if isinstance(v, torch.Tensor):
+                batch[k] = v.cuda()
+            elif isinstance(v, list): # for seqs
+                batch[k] = [vi.squeeze().cuda() for vi in v]
+        if 'coord_seqs' not in batch: batch['coord_seqs'] = None
         inp = (batch['inp'] - inp_sub) / inp_div
         if eval_bsize is None:
             with torch.no_grad():
                 pred = model(inp, batch['coord'], batch['cell'])
         else:
             pred = batched_predict(model, inp,
-                batch['coord'], batch['cell'], eval_bsize)
+                batch['coord'], batch['cell'], eval_bsize, batch['coord_seqs'])
         pred = pred * gt_div + gt_sub
         pred.clamp_(0, 1)
 
         if eval_type is not None: # reshape for shaving-eval
             ih, iw = batch['inp'].shape[-2:]
-            s = math.sqrt(batch['coord'].shape[1] / (ih * iw))
+            s = math.sqrt(batch['coord'].numel()//2 / (ih * iw))
             shape = [batch['inp'].shape[0], round(ih * s), round(iw * s), 3]
             pred = pred.view(*shape) \
                 .permute(0, 3, 1, 2).contiguous()
@@ -119,6 +123,7 @@ if __name__ == '__main__':
     parser.add_argument('--config')
     parser.add_argument('--model')
     parser.add_argument('--gpu', default='0')
+    parser.add_argument('--split_accel', action='store_true')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -128,9 +133,10 @@ if __name__ == '__main__':
 
     spec = config['test_dataset']
     dataset = datasets.make(spec['dataset'])
-    dataset = datasets.make(spec['wrapper'], args={'dataset': dataset})
+    dataset = datasets.make(spec['wrapper'], 
+                args={'dataset': dataset, 'split_accel': args.split_accel})
     loader = DataLoader(dataset, batch_size=spec['batch_size'],
-        num_workers=8, pin_memory=True)
+        num_workers=0, pin_memory=True)
 
     model_spec = torch.load(args.model)['model']
     model = models.make(model_spec, load_sd=True).cuda()

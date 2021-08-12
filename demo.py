@@ -8,7 +8,7 @@ from torchvision import transforms
 import models
 from utils import make_coord
 from test import batched_predict
-
+import time
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     img = transforms.ToTensor()(Image.open(args.input).convert('RGB'))
 
     model = models.make(torch.load(args.model)['model'], load_sd=True).cuda()
-
+    t0 = time.time()
     h, w = list(map(int, args.resolution.split(',')))
     if not args.split_accel:
         coord = make_coord((h, w)).cuda()
@@ -42,4 +42,6 @@ if __name__ == '__main__':
             coord.unsqueeze(0), cell.unsqueeze(0), coord_seqs=coord_seqs, bsize=30000)
     
     pred = (pred * 0.5 + 0.5).clamp(0, 1).reshape(h, w, 3).permute(2, 0, 1).cpu()
+    t1 = time.time()
+    print(f"Time for 1 frame: {t1 - t0}")
     transforms.ToPILImage()(pred).save(args.output)

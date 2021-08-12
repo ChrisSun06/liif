@@ -138,9 +138,10 @@ class LIIF(nn.Module):
             eps_shift = 1e-6
         else:
             vx_lst, vy_lst, eps_shift = [0], [0], 0
-            
-        rx = 2 / feat.shape[-2] / 2
-        ry = 2 / feat.shape[-1] / 2
+        
+        # Attention. the order of dim has changed!
+        rx = 2 / feat.shape[1] / 2
+        ry = 2 / feat.shape[2] / 2
         q_id_seqs = []
         rel_coord_seqs = [] # nested list
         coord_feat_seqs = []
@@ -154,7 +155,7 @@ class LIIF(nn.Module):
                 q_id = one_d_sample(feat_id_seqs, coord_seqs_)
                 q_id = [q.long() for q in q_id]
                 q_coord_seqs = [feat_coord_seqs[i][idx] for i,idx in enumerate(q_id)]
-                rel_coords = [coord_seqs_[i] - q_coord_seqs[i] for i in range(2)]
+                rel_coords = [(coord_seqs_[i] - q_coord_seqs[i])*feat.shape[1+i] for i in range(2)]
                 rel_coord_seqs.append(rel_coords)
                 # if ret_feat:
                 coord_feat_seqs.append([

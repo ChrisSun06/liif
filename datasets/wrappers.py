@@ -15,11 +15,12 @@ from utils import to_pixel_samples
 @register('sr-implicit-paired')
 class SRImplicitPaired(Dataset):
 
-    def __init__(self, dataset, inp_size=None, augment=False, sample_q=None):
+    def __init__(self, dataset, inp_size=None, augment=False, sample_q=None, split_accel=False):
         self.dataset = dataset
         self.inp_size = inp_size
         self.augment = augment
         self.sample_q = sample_q
+        self.split_accel = split_accel
 
     def __len__(self):
         return len(self.dataset)
@@ -59,7 +60,7 @@ class SRImplicitPaired(Dataset):
             crop_lr = augment(crop_lr)
             crop_hr = augment(crop_hr)
 
-        hr_coord, hr_rgb = to_pixel_samples(crop_hr.contiguous())
+        hr_coord, hr_rgb = to_pixel_samples(crop_hr.contiguous(), with_split=self.split_accel)
 
         if self.sample_q is not None:
             sample_lst = np.random.choice(
@@ -67,17 +68,29 @@ class SRImplicitPaired(Dataset):
             hr_coord = hr_coord[sample_lst]
             hr_rgb = hr_rgb[sample_lst]
 
-        cell = torch.ones_like(hr_coord)
-        cell[:, 0] *= 2 / crop_hr.shape[-2]
-        cell[:, 1] *= 2 / crop_hr.shape[-1]
+        if not self.split_accel:
+            cell = torch.ones_like(hr_coord)
+            cell[:, 0] *= 2 / crop_hr.shape[-2]
+            cell[:, 1] *= 2 / crop_hr.shape[-1]
 
-        return {
-            'inp': crop_lr,
-            'coord': hr_coord,
-            'cell': cell,
-            'gt': hr_rgb
-        }
+            return {
+                'inp': crop_lr,
+                'coord': hr_coord,
+                'cell': cell,
+                'gt': hr_rgb
+            }
+        
+        else:
+            cell = torch.tensor([2 / crop_hr.shape[-2], 2 / crop_hr.shape[-1]])
+            coord, coord_seqs = hr_coord
 
+            return {
+                'inp': crop_lr,
+                'coord': coord,
+                'coord_seqs': coord_seqs,
+                'cell': cell,
+                'gt': hr_rgb
+            }
 
 def resize_fn(img, size):
     return transforms.ToTensor()(
